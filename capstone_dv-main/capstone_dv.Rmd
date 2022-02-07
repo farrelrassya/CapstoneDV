@@ -1,0 +1,204 @@
+---
+title: "capstone_dv"
+author: "Farrel Rassya"
+date: "07/02/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 1. Input Library
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(plotly)
+library(glue)
+```
+
+
+## 1.1 Deskripsi Variabel
+1. `tanggal` : Tanggal pengukuran kualitas udara
+2. `stasiun` : Lokasi pengukuran di stasiun
+3. `pm10` : Partikulat salah satu parameter yang diukur
+4. `pm25` : Partikulat salah satu parameter yang diukur
+5. `so2` : Sulfida (dalam bentuk SO2) salah satu parameter yang diukur
+6. `co` : Carbon Monoksida salah satu parameter yang diukur
+7. `o3` : Ozon salah satu parameter yang diukur
+8. `no2` : Nitrogen dioksida salah satu parameter yang diukur
+9. `max` : Nilai ukur paling tinggi dari seluruh parameter yang diukur dalam waktu yang sama
+10. `critical` : Parameter yang hasil pengukurannya paling tinggi
+11. `categori` : Kategori hasil perhitungan indeks standar pencemaran udara
+
+# 2. Input Data
+```{r}
+ispu <- read.csv("indeks-standar-pencemar-udara-di-spku-bulan-mei-tahun-2021.csv")
+
+head(ispu)
+```
+# 3. Data Wrangling
+Cek tipe data
+```{r}
+glimpse(ispu)
+```
+
+Sesuaikan tipe data nya agar sesuai
+```{r}
+ispu <- 
+  ispu %>% 
+  mutate(tanggal = as.Date(tanggal)) %>% 
+  mutate(stasiun = as.factor(stasiun)) %>% 
+  mutate(pm10 = as.numeric(pm10)) %>% 
+  mutate(pm25 = as.numeric(pm25)) %>% 
+  mutate(co = as.numeric(co)) %>% 
+  mutate(o3 = as.numeric(o3)) %>% 
+  mutate(no2 = as.numeric(no2)) %>% 
+  mutate(critical = as.factor(critical)) %>% 
+  mutate(categori = as.factor(categori))
+
+```
+
+```{r}
+glimpse(ispu)
+```
+
+
+Missing value
+
+```{r}
+ispu %>% 
+  is.na() %>% 
+  colSums()/nrow(ispu)
+```
+
+
+Buang kolom yg terdapat na
+```{r}
+ispu <- 
+  ispu %>% 
+  drop_na(pm10, pm25, so2, co, o3, no2)
+
+ispu %>% 
+  is.na() %>% 
+  colSums()/nrow(ispu)
+```
+
+
+```{r}
+ispu <- 
+  ispu %>% 
+   rename(CO = co,
+          NO2 = no2,
+         O3 = o3,
+         SO2 = so2,
+         PM10 = pm10,
+         PM2.5 = pm25)
+```
+
+# 4. Data Visualization
+
+```{r}
+ispu_case1 <- 
+  ispu %>% 
+  select(stasiun, PM10, PM2.5, SO2, CO, O3, NO2) %>% 
+  pivot_longer(cols = c(PM10, PM2.5, SO2, CO, O3, NO2),
+               names_to = "Parameter_Polutan",
+               values_to = "Total")
+
+ispu_case1
+```
+
+```{r}
+ispu_lolipop <- 
+  ispu_case1 %>% 
+  select(stasiun, Parameter_Polutan, Total) %>%
+  group_by(Parameter_Polutan) %>% 
+  mutate(Parameter_Polutan = as.factor(Parameter_Polutan)) %>% 
+  summarise(mean_parameter = mean(Total)) %>%
+  arrange(mean_parameter, Parameter_Polutan) %>% 
+  ungroup()
+
+ispu_lolipop
+```
+
+
+```{r}
+ispu_plot1 <-
+  ispu_lolipop %>% 
+  ggplot(aes(x = mean_parameter, 
+             y = reorder(Parameter_Polutan, mean_parameter),
+              text = glue("Average Particle: {mean_parameter}"))
+        )+
+  geom_segment(aes(yend = Parameter_Polutan,
+                   xend = 0),
+               col = "orange")+
+ geom_point(col = "yellowgreen", size = 2.5)+
+  labs(title = "Average Pollutant Parameters per DKI Jakarta Station",
+       y = "Pollutant Parameters",
+       x = "Average Particle (µgram/m3)")+
+  theme_minimal()+
+  theme(legend.position = "none")
+```
+
+
+```{r}
+ggplotly(ispu_plot1, tooltip = "text")
+```
+
+
+```{r}
+options(dplyr.summarise.inform = FALSE)
+
+ispu_case2 <-
+  ispu %>%
+  select(stasiun, tanggal, max) %>%
+  group_by(tanggal) %>% 
+  summarise(sum_max = sum(max)) %>% 
+  arrange(-sum_max) %>% 
+  ungroup()
+
+ispu_case2
+```
+
+
+```{r}
+ispu_bar3 <- 
+ispu_case2 %>% 
+ggplot(aes(x = tanggal, 
+           y = sum_max,
+           text = glue("{sum_max}")))+
+  geom_bar(stat = "identity",
+           width = 0.5,
+           fill = "tomato")+
+  scale_fill_brewer("Set1")+
+  labs(title = "Total Category of Air Pollutant Standard Index each day",
+       x = "Date",
+       y = "Total")+
+  theme_minimal()
+
+ggplotly(ispu_bar3, tooltip = "text")
+```
+
+```{r}
+
+ispu_bar <- 
+ispu_case2 %>% 
+ggplot(aes(x = categori, 
+           y = sum_max,
+           text = glue("{sum_max}")))+
+  geom_bar(stat = "identity",
+           width = 0.5,
+           fill = "tomato")+
+  scale_fill_brewer("Set1")+
+  labs(title = "Total Kategori Indeks Standar Pencemar Udara",
+       x = "Kategori",
+       y = "Total")+
+  theme_minimal()
+
+ggplotly(ispu_bar, tooltip = "text")
+```
+
+
